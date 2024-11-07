@@ -1,18 +1,25 @@
 const Attachment = require("../models/Attachment");
+const sanitizeFilename = require("../utils/sanitizeFilename");
 
-const uploadFiles = async (req, res) => {
+exports.uploadFiles = async (req, res) => {
   const { cardId } = req.params;
 
   try {
-    const attachments = req.files.map((file) => ({
-      cardId,
-      filename: file.originalname,
-      path: file.path,
-    }));
+    const attachments = await Promise.all(
+      req.files.map(async (file) => {
+        const sanitizedFilename = sanitizeFilename(file.originalname);
+        const newAttachment = new Attachment({
+          cardId,
+          filename: sanitizedFilename,
+          imageBuffer: file.buffer,
+          imageType: file.mimetype,
+        });
+        await newAttachment.save();
+        return { filename: sanitizedFilename };
+      })
+    );
 
-    await Attachment.insertMany(attachments);
     const count = await Attachment.countDocuments({ cardId });
-
     res.json({
       message: "Files uploaded successfully",
       count,
@@ -26,7 +33,7 @@ const uploadFiles = async (req, res) => {
   }
 };
 
-const getAttachmentCount = async (req, res) => {
+exports.getAttachmentCount = async (req, res) => {
   const { cardId } = req.params;
 
   try {
@@ -39,5 +46,3 @@ const getAttachmentCount = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
-
-module.exports = { uploadFiles, getAttachmentCount };
